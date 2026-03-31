@@ -1,35 +1,27 @@
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:padding="16dp">
-    <LinearLayout
+    android:layout_height="match_parent">
+
+    <androidx.appcompat.widget.Toolbar
+        android:id="@+id/toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:background="?attr/colorPrimary"
+        app:titleTextColor="#FFFFFF" />
+
+    <FrameLayout
+        android:id="@+id/fragment_container"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_above="@+id/bottom_navigation"
+        android:layout_below="@id/toolbar" />
+
+    <com.google.android.material.bottomnavigation.BottomNavigationView
+        android:id="@+id/bottom_navigation"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical">
-
-        <TextView android:id="@+id/statusText" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="RNS: Disconnected" android:textColor="#FF0000" android:textStyle="bold" />
-        
-        <EditText android:id="@+id/editTarget" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Base Station Address (Hex)" />
-        <EditText android:id="@+id/editHarvesterId" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Harvester Name/ID" />
-        <EditText android:id="@+id/editBlockId" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Block ID" />
-
-        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="16dp">
-            <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Ripe Bunches:" android:textSize="18sp" />
-            <Button android:id="@+id/btnMinusRipe" android:layout_width="50dp" android:layout_height="wrap_content" android:text="-" />
-            <TextView android:id="@+id/txtRipeCount" android:layout_width="40dp" android:layout_height="wrap_content" android:text="0" android:gravity="center" android:textSize="20sp" />
-            <Button android:id="@+id/btnPlusRipe" android:layout_width="50dp" android:layout_height="wrap_content" android:text="+" />
-        </LinearLayout>
-
-        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="8dp">
-            <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="Empty Bunches:" android:textSize="18sp" />
-            <Button android:id="@+id/btnMinusEmpty" android:layout_width="50dp" android:layout_height="wrap_content" android:text="-" />
-            <TextView android:id="@+id/txtEmptyCount" android:layout_width="40dp" android:layout_height="wrap_content" android:text="0" android:gravity="center" android:textSize="20sp" />
-            <Button android:id="@+id/btnPlusEmpty" android:layout_width="50dp" android:layout_height="wrap_content" android:text="+" />
-        </LinearLayout>
-
-        <ImageView android:id="@+id/imgPreview" android:layout_width="100dp" android:layout_height="100dp" android:layout_gravity="center" android:layout_marginTop="16dp" android:background="#EEEEEE" android:src="@android:drawable/ic_menu_camera" />
-        <Button android:id="@+id/btnPhoto" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Take Harvest Photo" />
-        
-        <Button android:id="@+id/btnSubmit" android:layout_width="match_parent" android:layout_height="80dp" android:text="SEND REPORT" android:backgroundTint="#2E7D32" android:textColor="#FFFFFF" android:layout_marginTop="24dp" />
-    </LinearLayout>
-</ScrollView>
+        android:layout_alignParentBottom="true"
+        android:background="#FFFFFF"
+        app:menu="@menu/bottom_nav_menu" />
+</RelativeLayout>

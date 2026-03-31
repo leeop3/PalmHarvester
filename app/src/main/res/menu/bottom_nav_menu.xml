@@ -1,0 +1,6 @@
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:id="@+id/nav_log" android:title="Log" android:icon="@android:drawable/ic_menu_edit" />
+    <item android:id="@+id/nav_records" android:title="Records" android:icon="@android:drawable/ic_menu_view" />
+    <item android:id="@+id/nav_analytics" android:title="Stats" android:icon="@android:drawable/ic_menu_my_calendar" />
+    <item android:id="@+id/nav_sync" android:title="Sync" android:icon="@android:drawable/stat_notify_sync" />
+</menu>

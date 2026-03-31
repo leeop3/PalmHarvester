@@ -1,5 +1,6 @@
 apply plugin: 'com.android.application'
 apply plugin: 'kotlin-android'
+apply plugin: 'kotlin-kapt'
 apply plugin: 'com.chaquo.python'
 
 android {
@@ -30,7 +31,14 @@ dependencies {
     implementation "com.google.android.material:material:1.9.0"
     implementation "androidx.constraintlayout:constraintlayout:2.1.4"
     implementation "com.google.android.gms:play-services-location:21.0.1"
-    // CRITICAL: Added for Activity Result Launchers
+    implementation "androidx.lifecycle:lifecycle-livedata-ktx:2.6.1"
     implementation "androidx.activity:activity-ktx:1.8.2"
-    implementation "androidx.fragment:fragment-ktx:1.6.2"
+    
+    // Room Database
+    implementation "androidx.room:room-runtime:2.6.1"
+    implementation "androidx.room:room-ktx:2.6.1"
+    kapt "androidx.room:room-compiler:2.6.1"
+
+    // QR & Utils
+    implementation "com.google.zxing:core:3.5.1"
 }

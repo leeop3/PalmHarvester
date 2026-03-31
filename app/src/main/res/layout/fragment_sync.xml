@@ -1,0 +1,7 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="vertical" android:padding="20dp" android:gravity="center_horizontal">
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Sync Data via LoRa" android:textSize="22sp" android:textStyle="bold"/>
+    <TextView android:id="@+id/txtSyncStats" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Pending: 0 | Synced: 0" android:layout_marginTop="20dp" android:textSize="18sp"/>
+    <Button android:id="@+id/btnSync" android:layout_width="match_parent" android:layout_height="100dp" android:text="SYNC NOW" android:layout_marginTop="40dp" android:backgroundTint="#2E7D32"/>
+</LinearLayout>
