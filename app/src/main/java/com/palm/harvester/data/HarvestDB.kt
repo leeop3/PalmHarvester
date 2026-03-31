@@ -12,8 +12,8 @@ data class HarvestEntry(
     val emptyCount: Int,
     val latitude: Double,
     val longitude: Double,
-    val timestamp: String, // Full string for CSV
-    val reportDate: String, // yyyy-MM-dd for sorting/calendar
+    val timestamp: String,
+    val reportDate: String,
     val photoBase64: String,
     val isSynced: Boolean = false
 )
@@ -55,7 +55,9 @@ abstract class AppDatabase : RoomDatabase() {
         @Volatile private var INSTANCE: AppDatabase? = null
         fun getInstance(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
-                INSTANCE ?: Room.databaseBuilder(context.applicationContext, AppDatabase::class.java, "harvester_db").build().also { INSTANCE = it }
+                val instance = Room.databaseBuilder(context.applicationContext, AppDatabase::class.java, "harvester_db").build()
+                INSTANCE = instance
+                instance
             }
         }
     }
