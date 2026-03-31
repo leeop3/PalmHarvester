@@ -1,0 +1,33 @@
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:background="#FFFFFF" android:padding="20dp">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical">
+        
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="NEW HARVEST RECORD" android:textSize="20sp" android:textStyle="bold" android:layout_marginBottom="20dp"/>
+
+        <EditText android:id="@+id/editBlockId" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Enter Block ID (e.g. A1)" android:inputType="textCapCharacters" />
+
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Ripe Bunches" android:layout_marginTop="15dp"/>
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+            <Button android:id="@+id/btnMinusRipe" android:layout_width="60dp" android:layout_height="wrap_content" android:text="-"/>
+            <TextView android:id="@+id/txtRipeCount" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="0" android:gravity="center" android:textSize="24sp"/>
+            <Button android:id="@+id/btnPlusRipe" android:layout_width="60dp" android:layout_height="wrap_content" android:text="+"/>
+        </LinearLayout>
+
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Empty Bunches" android:layout_marginTop="15dp"/>
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+            <Button android:id="@+id/btnMinusEmpty" android:layout_width="60dp" android:layout_height="wrap_content" android:text="-"/>
+            <TextView android:id="@+id/txtEmptyCount" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content" android:text="0" android:gravity="center" android:textSize="24sp"/>
+            <Button android:id="@+id/btnPlusEmpty" android:layout_width="60dp" android:layout_height="wrap_content" android:text="+"/>
+        </LinearLayout>
+
+        <ImageView android:id="@+id/imgPreview" android:layout_width="120dp" android:layout_height="120dp" android:layout_gravity="center" android:layout_marginTop="20dp" android:background="#F0F0F0" android:src="@android:drawable/ic_menu_camera"/>
+        <Button android:id="@+id/btnPhoto" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Take Photo" android:layout_marginTop="10dp"/>
+
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="30dp">
+            <Button android:id="@+id/btnCancel" android:layout_width="0dp" android:layout_weight="1" android:layout_height="60dp" android:text="CANCEL" android:backgroundTint="#D32F2F"/>
+            <View android:layout_width="10dp" android:layout_height="1dp"/>
+            <Button android:id="@+id/btnSave" android:layout_width="0dp" android:layout_weight="1" android:layout_height="60dp" android:text="SAVE" android:backgroundTint="#2E7D32"/>
+        </LinearLayout>
+    </LinearLayout>
+</ScrollView>
