@@ -1,0 +1,22 @@
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:padding="20dp">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical">
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Harvester Nickname" android:textStyle="bold"/>
+        <EditText android:id="@+id/setNick" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="e.g. Harvester_01"/>
+        
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Base Station Address" android:textStyle="bold" android:layout_marginTop="10dp"/>
+        <EditText android:id="@+id/setBase" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="32-char Hex Address"/>
+
+        <View android:layout_width="match_parent" android:layout_height="1dp" android:background="#CCCCCC" android:layout_marginVertical="15dp"/>
+        
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Radio Frequency (Hz)" android:textStyle="bold"/>
+        <EditText android:id="@+id/setFreq" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="number" android:text="433000000"/>
+
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Spreading Factor" android:textStyle="bold" android:layout_marginTop="10dp"/>
+        <Spinner android:id="@+id/setSf" android:layout_width="match_parent" android:layout_height="wrap_content" android:entries="@array/sf_options" />
+
+        <Button android:id="@+id/btnAnnounce" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Manual Announce" android:layout_marginTop="20dp" android:backgroundTint="#1976D2"/>
+    </LinearLayout>
+</ScrollView>
