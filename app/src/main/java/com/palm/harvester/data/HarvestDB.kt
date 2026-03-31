@@ -13,7 +13,7 @@ data class HarvestEntry(
     val latitude: Double,
     val longitude: Double,
     val timestamp: String,
-    val reportDate: String,
+    val reportDate: String, 
     val photoBase64: String,
     val isSynced: Boolean = false
 )
@@ -37,27 +37,26 @@ interface HarvestDao {
     @Query("SELECT * FROM harvest_entries WHERE isSynced = 0")
     suspend fun getUnsentEntries(): List<HarvestEntry>
 
-    @Query("""
-        SELECT SUM(ripeCount) as totalRipe, SUM(emptyCount) as totalEmpty, 
-        SUM(ripeCount + emptyCount) as totalBunches, COUNT(*) as entryCount 
-        FROM harvest_entries WHERE reportDate = :date
-    """)
+    @Query("SELECT SUM(ripeCount) as totalRipe, SUM(emptyCount) as totalEmpty, SUM(ripeCount + emptyCount) as totalBunches, COUNT(*) as entryCount FROM harvest_entries WHERE reportDate = :date")
     fun getSummaryForDate(date: String): LiveData<DaySummary>
+
+    // NEW: Monthly Stats Query
+    @Query("SELECT SUM(ripeCount) as totalRipe, SUM(emptyCount) as totalEmpty, SUM(ripeCount + emptyCount) as totalBunches, COUNT(*) as entryCount FROM harvest_entries WHERE reportDate LIKE :monthYear || '%'")
+    fun getSummaryForMonth(monthYear: String): LiveData<DaySummary>
 
     @Query("UPDATE harvest_entries SET isSynced = 1 WHERE id = :id")
     suspend fun markAsSynced(id: Long)
 }
 
-@Database(entities = [HarvestEntry::class], version = 1, exportSchema = false)
+@Database(entities = [HarvestEntry::class], version = 2, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun harvestDao(): HarvestDao
     companion object {
         @Volatile private var INSTANCE: AppDatabase? = null
         fun getInstance(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
-                val instance = Room.databaseBuilder(context.applicationContext, AppDatabase::class.java, "harvester_db").build()
-                INSTANCE = instance
-                instance
+                INSTANCE ?: Room.databaseBuilder(context.applicationContext, AppDatabase::class.java, "harvester_db")
+                .fallbackToDestructiveMigration().build().also { INSTANCE = it }
             }
         }
     }

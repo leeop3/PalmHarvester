@@ -53,11 +53,13 @@ def start_engine(service_obj, storage_path):
         if not os.path.exists(rns_dir): os.makedirs(rns_dir)
         if not os.path.exists(lxmf_dir): os.makedirs(lxmf_dir)
         
+        # Clean config to prevent port collisions
         with open(os.path.join(rns_dir, "config"), "w") as f:
             f.write("[reticulum]\nenable_transport = True\nshare_instance = Yes\n\n[interfaces]\n")
 
         RNS.Reticulum(configdir=rns_dir)
         
+        # Identity is stored in the root storage_path to keep it safe from config wipes
         id_path = os.path.join(storage_path, "storage_identity")
         local_id = RNS.Identity.from_file(id_path) if os.path.exists(id_path) else RNS.Identity()
         if not os.path.exists(id_path): local_id.to_file(id_path)
@@ -74,6 +76,7 @@ def inject_rnode(radio_params_json):
     global active_ifac
     try:
         params = json.loads(radio_params_json)
+        # LOCKED RADIO SETTINGS: 433MHz, SF8, CR6
         ictx = {
             "name": "Android RNode Bridge",
             "type": "RNodeInterface",
@@ -84,8 +87,8 @@ def inject_rnode(radio_params_json):
             "frequency": int(params.get("freq", 433000000)),
             "bandwidth": int(params.get("bw", 125000)),
             "txpower": int(params.get("tx", 17)),
-            "spreadingfactor": int(params.get("sf", 8)), # DEFAULT SET TO 8
-            "codingrate": int(params.get("cr", 6)),      # DEFAULT SET TO 6
+            "spreadingfactor": int(params.get("sf", 8)),
+            "codingrate": int(params.get("cr", 6)),
             "flow_control": False
         }
         
@@ -105,17 +108,32 @@ def inject_rnode(radio_params_json):
 def send_report(target_hex, harvester_nick, block_id, ripe, empty, lat, lon, ts_str, photo_b64):
     global router, local_destination
     try:
+        # Generate unique report ID
         report_id = f"R{int(time.time())}"
+        
+        # ALIGNED CSV SCHEMA: id, harvester_id, block_id, ripe_bunches, empty_bunches, latitude, longitude, timestamp, photo_file
         csv_payload = f"id,harvester_id,block_id,ripe_bunches,empty_bunches,latitude,longitude,timestamp,photo_file\n"
         csv_payload += f"{report_id},{harvester_nick},{block_id},{ripe},{empty},{lat},{lon},{ts_str},{photo_b64}"
         
         dest_hash = bytes.fromhex(target_hex)
+        # Check if we know this destination's identity
         dest_id = RNS.Identity.recall(dest_hash)
+        
         target = RNS.Destination(dest_id, RNS.Destination.OUT, RNS.Destination.SINGLE, "lxmf", "delivery")
         if dest_id is None: target.hash = dest_hash
         
         lxm = LXMessage(target, local_destination, csv_payload, title="Harvest Sync")
         router.handle_outbound(lxm)
+        print(f"RNS-LOG: Report {report_id} pushed to router.")
         return "Report Sent"
     except Exception as e:
+        print(f"RNS-LOG: Send failed: {e}")
         return f"Error: {str(e)}"
+
+def announce_now():
+    try:
+        if local_destination:
+            local_destination.announce()
+            print("RNS-LOG: Manual Announce broadcasted.")
+    except Exception as e:
+        print(f"RNS-LOG: Announce Error: {e}")
