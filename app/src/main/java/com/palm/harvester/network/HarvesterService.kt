@@ -68,18 +68,17 @@ class HarvesterService : Service() {
                 val btIn = btSocket!!.inputStream
                 val btOut = btSocket!!.outputStream
                 val tcpIn = client.inputStream
-                val tcpOut = client.outputServerStream() // Fix for name clash if any
-                val tcpOutReal = client.outputStream
+                val tcpOut = client.outputStream
 
                 // BT -> TCP Pipe
                 launch {
                     val buf = ByteArray(2048)
                     try {
-                        var r = 0 // FIX: Explicitly initialized
+                        var r = 0
                         while (isActive && btIn.read(buf).also { r = it } != -1) {
                             if (r > 0) {
-                                tcpOutReal.write(buf, 0, r)
-                                tcpOutReal.flush()
+                                tcpOut.write(buf, 0, r)
+                                tcpOut.flush()
                             }
                         }
                     } catch (e: Exception) { }
@@ -89,7 +88,7 @@ class HarvesterService : Service() {
                 launch {
                     val buf = ByteArray(2048)
                     try {
-                        var r = 0 // FIX: Explicitly initialized
+                        var r = 0
                         while (isActive && tcpIn.read(buf).also { r = it } != -1) {
                             if (r > 0) {
                                 btOut.write(buf, 0, r)
