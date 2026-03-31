@@ -1,22 +1,30 @@
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content"
-    android:padding="20dp">
-    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical">
-        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Harvester Nickname" android:textStyle="bold"/>
-        <EditText android:id="@+id/setNick" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="e.g. Harvester_01"/>
+    android:layout_height="wrap_content">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" 
+        android:orientation="vertical" android:padding="20dp">
         
-        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Base Station Address" android:textStyle="bold" android:layout_marginTop="10dp"/>
-        <EditText android:id="@+id/setBase" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="32-char Hex Address"/>
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="PROFILE" android:textStyle="bold" android:textColor="#1B5E20"/>
+        <EditText android:id="@+id/setNick" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Harvester Nickname"/>
+        <EditText android:id="@+id/setBase" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Base Station Address"/>
 
-        <View android:layout_width="match_parent" android:layout_height="1dp" android:background="#CCCCCC" android:layout_marginVertical="15dp"/>
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="RADIO CONFIG" android:textStyle="bold" android:textColor="#1B5E20" android:layout_marginTop="15dp"/>
         
-        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Radio Frequency (Hz)" android:textStyle="bold"/>
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Frequency (Hz)" android:textSize="12sp"/>
         <EditText android:id="@+id/setFreq" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="number" android:text="433000000"/>
 
-        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Spreading Factor" android:textStyle="bold" android:layout_marginTop="10dp"/>
-        <Spinner android:id="@+id/setSf" android:layout_width="match_parent" android:layout_height="wrap_content" android:entries="@array/sf_options" />
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Bandwidth (Hz)" android:textSize="12sp"/>
+        <Spinner android:id="@+id/setBw" android:layout_width="match_parent" android:layout_height="wrap_content" android:entries="@array/bw_options"/>
 
-        <Button android:id="@+id/btnAnnounce" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Manual Announce" android:layout_marginTop="20dp" android:backgroundTint="#1976D2"/>
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="TX Power (dBm)" android:textSize="12sp"/>
+        <EditText android:id="@+id/setTx" android:layout_width="match_parent" android:layout_height="wrap_content" android:inputType="number" android:text="17"/>
+
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Spreading Factor" android:textSize="12sp"/>
+        <Spinner android:id="@+id/setSf" android:layout_width="match_parent" android:layout_height="wrap_content" android:entries="@array/sf_options"/>
+
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Coding Rate" android:textSize="12sp"/>
+        <Spinner android:id="@+id/setCr" android:layout_width="match_parent" android:layout_height="wrap_content" android:entries="@array/cr_options"/>
+
+        <Button android:id="@+id/btnAnnounce" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Broadcast Presence" android:layout_marginTop="10dp" android:backgroundTint="#1976D2"/>
     </LinearLayout>
 </ScrollView>
