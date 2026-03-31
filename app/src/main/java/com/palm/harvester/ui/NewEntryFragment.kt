@@ -28,6 +28,7 @@ class NewEntryFragment : Fragment(R.layout.fragment_new_entry) {
     private var ripe = 0; private var empty = 0
     private var photoB64 = ""
     private var lat = 0.0; private var lon = 0.0
+    private var vibrator: Vibrator? = null
 
     private val cameraLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
@@ -39,27 +40,29 @@ class NewEntryFragment : Fragment(R.layout.fragment_new_entry) {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         
-        // VIBRATION HAPTICS
-        val vibrator = requireContext().getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+        vibrator = requireContext().getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
 
         val tRipe = view.findViewById<TextView>(R.id.txtRipeCount)
         val tEmpty = view.findViewById<TextView>(R.id.txtEmptyCount)
         val editBlock = view.findViewById<EditText>(R.id.editBlockId)
 
-        // SMART MEMORY: Load the last used Block ID
         val prefs = requireContext().getSharedPreferences("harvester_prefs", Context.MODE_PRIVATE)
         editBlock.setText(prefs.getString("last_block", ""))
 
-        fun vibrate() {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                vibrator.vibrate(VibrationEffect.createOneShot(50, VibrationEffect.DEFAULT_AMPLITUDE))
-            } else { vibrator.vibrate(50) }
+        fun doVibrate(ms: Long) {
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    vibrator?.vibrate(VibrationEffect.createOneShot(ms, VibrationEffect.DEFAULT_AMPLITUDE))
+                } else {
+                    vibrator?.vibrate(ms)
+                }
+            } catch (e: Exception) {}
         }
 
-        view.findViewById<Button>(R.id.btnPlusRipe).setOnClickListener { vibrate(); ripe++; tRipe.text = ripe.toString() }
-        view.findViewById<Button>(R.id.btnMinusRipe).setOnClickListener { vibrate(); if(ripe > 0) ripe--; tRipe.text = ripe.toString() }
-        view.findViewById<Button>(R.id.btnPlusEmpty).setOnClickListener { vibrate(); empty++; tEmpty.text = empty.toString() }
-        view.findViewById<Button>(R.id.btnMinusEmpty).setOnClickListener { vibrate(); if(empty > 0) empty--; tEmpty.text = empty.toString() }
+        view.findViewById<Button>(R.id.btnPlusRipe).setOnClickListener { doVibrate(40); ripe++; tRipe.text = ripe.toString() }
+        view.findViewById<Button>(R.id.btnMinusRipe).setOnClickListener { doVibrate(40); if(ripe > 0) ripe--; tRipe.text = ripe.toString() }
+        view.findViewById<Button>(R.id.btnPlusEmpty).setOnClickListener { doVibrate(40); empty++; tEmpty.text = empty.toString() }
+        view.findViewById<Button>(R.id.btnMinusEmpty).setOnClickListener { doVibrate(40); if(empty > 0) empty--; tEmpty.text = empty.toString() }
 
         view.findViewById<Button>(R.id.btnPhoto).setOnClickListener {
             val cameraIntent = Intent(MediaStore.ACTION_IMAGE_CAPTURE)
@@ -68,24 +71,25 @@ class NewEntryFragment : Fragment(R.layout.fragment_new_entry) {
         
         view.findViewById<Button>(R.id.btnSave).setOnClickListener {
             val block = editBlock.text.toString().trim()
-            if (block.isEmpty()) return@setOnClickListener 
+            if (block.isEmpty()) {
+                Toast.makeText(context, "Enter Block ID", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener 
+            }
 
             lifecycleScope.launch(Dispatchers.IO) {
                 val now = Date()
                 val day = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(now)
                 val entry = HarvestEntry(
                     blockId = block, ripeCount = ripe, emptyCount = empty,
-                    latitude = lat, longitude = lon, timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(now),
+                    latitude = lat, longitude = lon, 
+                    timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(now),
                     reportDate = day, photoBase64 = photoB64
                 )
                 AppDatabase.getInstance(requireContext()).harvestDao().insert(entry)
-                
-                // SAVE TO SMART MEMORY
                 prefs.edit().putString("last_block", block).apply()
 
                 launch(Dispatchers.Main) { 
-                    // Long vibrate for success
-                    vibrator.vibrate(200)
+                    doVibrate(150)
                     requireActivity().onBackPressedDispatcher.onBackPressed()
                 }
             }
