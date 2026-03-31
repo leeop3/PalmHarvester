@@ -7,13 +7,13 @@ import android.bluetooth.BluetoothManager
 import android.content.*
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.location.Location
 import android.os.Bundle
 import android.provider.MediaStore
 import android.util.Base64
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.result.launch
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
@@ -30,15 +30,24 @@ class MainActivity : AppCompatActivity() {
     private var photoBase64 = ""
     private var lastLocation: Location? = null
 
-    // 1. Camera Launcher
-    private val takePhoto = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        if (result.resultCode == RESULT_OK) {
-            val imageBitmap = result.data?.extras?.get("data") as Bitmap
-            processImage(imageBitmap)
+    // 1. STABLE CAMERA LAUNCHER (Returns thumbnail directly)
+    private val takePhoto = registerForActivityResult(ActivityResultContracts.TakePicturePreview()) { bitmap ->
+        if (bitmap != null) {
+            processImage(bitmap)
+        } else {
+            Toast.makeText(this, "Photo cancelled", Toast.LENGTH_SHORT).show()
         }
     }
 
-    // 2. Bluetooth Permission Launcher
+    // 2. PERMISSION LAUNCHER
+    private val requestPermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
+        if (isGranted) {
+            takePhoto.launch()
+        } else {
+            Toast.makeText(this, "Camera permission denied", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     private val btPermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { perms ->
         if (perms.values.all { it }) showDevicePicker()
     }
@@ -50,16 +59,21 @@ class MainActivity : AppCompatActivity() {
 
         setupCounters()
         
-        binding.btnPhoto.setOnClickListener { takePhoto.launch(Intent(MediaStore.ACTION_IMAGE_CAPTURE)) }
+        // Check permission before launching camera
+        binding.btnPhoto.setOnClickListener { 
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+                takePhoto.launch()
+            } else {
+                requestPermissionLauncher.launch(Manifest.permission.CAMERA)
+            }
+        }
         
         binding.btnSubmit.setOnClickListener { sendReport() }
-
         binding.statusText.setOnClickListener { requestBtPerms() }
 
-        // Observe Mesh Status
         HarvesterService.serviceStatus.observe(this) { status ->
             binding.statusText.text = status
-            binding.statusText.setTextColor(if (status.contains("Ready") || status.contains("Active")) 0xFF2E7D32.toInt() else 0xFFFF0000.toInt())
+            binding.statusText.setTextColor(if (status.contains("Active") || status.contains("Ready")) 0xFF2E7D32.toInt() else 0xFFFF0000.toInt())
         }
 
         startService(Intent(this, HarvesterService::class.java))
@@ -74,14 +88,15 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun processImage(bitmap: Bitmap) {
-        // CRITICAL FOR LORA: Scale down to 100x100 and compress to 50% WebP
+        // RESIZE: 100x100 is the limit for LoRa stability
         val scaled = Bitmap.createScaledBitmap(bitmap, 100, 100, false)
         val baos = ByteArrayOutputStream()
+        // WEBP: 50% quality gives us ~3KB strings
         scaled.compress(Bitmap.CompressFormat.WEBP, 50, baos)
         val imageBytes = baos.toByteArray()
         photoBase64 = Base64.encodeToString(imageBytes, Base64.NO_WRAP)
         binding.imgPreview.setImageBitmap(scaled)
-        Toast.makeText(this, "Photo ready (${imageBytes.size} bytes)", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "Photo Compressed: ${imageBytes.size} bytes", Toast.LENGTH_SHORT).show()
     }
 
     @SuppressLint("MissingPermission")
@@ -89,8 +104,6 @@ class MainActivity : AppCompatActivity() {
         val fusedClient = LocationServices.getFusedLocationProviderClient(this)
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
             fusedClient.lastLocation.addOnSuccessListener { lastLocation = it }
-        } else {
-            registerForActivityResult(ActivityResultContracts.RequestPermission()) { if(it) updateGps() }.launch(Manifest.permission.ACCESS_FINE_LOCATION)
         }
     }
 
@@ -100,7 +113,7 @@ class MainActivity : AppCompatActivity() {
         val block = binding.editBlockId.text.toString()
 
         if (target.length < 10 || harvester.isEmpty() || block.isEmpty()) {
-            Toast.makeText(this, "Fill all fields", Toast.LENGTH_SHORT).show(); return
+            Toast.makeText(this, "Fill all fields and scan receiver address", Toast.LENGTH_SHORT).show(); return
         }
 
         val lat = lastLocation?.latitude ?: 0.0
@@ -112,7 +125,7 @@ class MainActivity : AppCompatActivity() {
                 val result = py.callAttr("send_report", target, harvester, block, ripeCount, emptyCount, lat, lon, photoBase64)
                 runOnUiThread { Toast.makeText(this, result.toString(), Toast.LENGTH_LONG).show() }
             } catch (e: Exception) {
-                runOnUiThread { Toast.makeText(this, "Python Error: ${e.message}", Toast.LENGTH_LONG).show() }
+                runOnUiThread { Toast.makeText(this, "Error: ${e.message}", Toast.LENGTH_LONG).show() }
             }
         }.start()
     }
