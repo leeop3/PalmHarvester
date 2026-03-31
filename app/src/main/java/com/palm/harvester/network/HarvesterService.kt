@@ -55,18 +55,15 @@ class HarvesterService : Service() {
                 tcpServer?.reuseAddress = true
                 tcpServer?.bind(InetSocketAddress("127.0.0.1", 7633))
                 
-                onStatusUpdate("Bridge 7633 Listening")
+                onStatusUpdate("Bridge 7633 Ready")
                 
-                // Start the background accept loop
                 launch { handleTcpClients() }
-
-                // Wait 500ms then tell Python to inject
-                delay(500)
+                delay(1000)
                 injectPython()
 
             } catch (e: Exception) {
-                onStatusUpdate("Bridge Error")
-                Log.e("PalmHarvester", "Bridge Failed", e)
+                onStatusUpdate("Bridge Failed")
+                Log.e("PalmHarvester", "Bridge Error", e)
             }
         }
     }
@@ -77,7 +74,7 @@ class HarvesterService : Service() {
                 try {
                     val client = tcpServer?.accept() ?: break
                     client.tcpNoDelay = true
-                    onStatusUpdate("Mesh Active")
+                    onStatusUpdate("LoRa Link Active")
 
                     val btIn = btSocket!!.inputStream
                     val btOut = btSocket!!.outputStream
@@ -116,7 +113,9 @@ class HarvesterService : Service() {
                 json.put("tx", prefs.getInt("tx", 17))
                 json.put("bw", prefs.getInt("bw", 125000))
                 py.getModule("rns_engine").callAttr("inject_rnode", json.toString())
-            } catch (e: Exception) {}
+            } catch (e: Exception) {
+                Log.e("PalmHarvester", "Python Injection Error", e)
+            }
         }
     }
 

@@ -1,4 +1,4 @@
-import sys, os, csv, io, json, signal, warnings, shutil, traceback, platform
+import sys, os, csv, io, json, signal, warnings, shutil, traceback, time
 from types import ModuleType
 import importlib.util, importlib.machinery
 
@@ -33,11 +33,6 @@ importlib.util.find_spec = _mock_find_spec
 
 # --- 2. IMPORT RNS ---
 import RNS
-try:
-    import RNS.vendor.platformutils as pu
-    pu.is_android = lambda: False
-except: pass
-
 from LXMF import LXMRouter, LXMessage
 from RNS.Interfaces.Android.RNodeInterface import RNodeInterface
 from RNS.Interfaces.Interface import Interface
@@ -46,15 +41,15 @@ signal.signal = lambda sig, handler: None
 
 kotlin_cb = None
 local_destination = None
+router = None
+active_ifac = None 
 
 def start_engine(service_obj, storage_path):
-    global kotlin_cb, local_destination
+    global kotlin_cb, local_destination, router
     kotlin_cb = service_obj
     try:
         rns_dir = os.path.join(storage_path, ".reticulum")
         lxmf_dir = os.path.join(storage_path, ".lxmf")
-        
-        # WIPE config only, keep identity
         if not os.path.exists(rns_dir): os.makedirs(rns_dir)
         if not os.path.exists(lxmf_dir): os.makedirs(lxmf_dir)
         
@@ -76,9 +71,9 @@ def start_engine(service_obj, storage_path):
         service_obj.onStatusUpdate(f"Init Error: {str(e)}")
 
 def inject_rnode(radio_params_json):
+    global active_ifac
     try:
         params = json.loads(radio_params_json)
-        # EXACT DICTIONARY THAT WORKED ON RECEIVER
         ictx = {
             "name": "Android RNode Bridge",
             "type": "RNodeInterface",
@@ -89,18 +84,18 @@ def inject_rnode(radio_params_json):
             "frequency": int(params.get("freq", 433000000)),
             "bandwidth": int(params.get("bw", 125000)),
             "txpower": int(params.get("tx", 17)),
-            "spreadingfactor": int(params.get("sf", 8)),
-            "codingrate": int(params.get("cr", 6)),
+            "spreadingfactor": int(params.get("sf", 8)), # DEFAULT SET TO 8
+            "codingrate": int(params.get("cr", 6)),      # DEFAULT SET TO 6
             "flow_control": False
         }
         
-        ifac = RNodeInterface(RNS.Transport, ictx)
-        ifac.mode = Interface.MODE_FULL
-        ifac.IN = True
-        ifac.OUT = True
-        RNS.Transport.interfaces.append(ifac)
+        active_ifac = RNodeInterface(RNS.Transport, ictx)
+        active_ifac.mode = Interface.MODE_FULL
+        active_ifac.IN = True
+        active_ifac.OUT = True
         
-        import time
+        RNS.Transport.interfaces.append(active_ifac)
+        
         time.sleep(1)
         if local_destination: local_destination.announce()
         return "RNode Active"
@@ -108,6 +103,7 @@ def inject_rnode(radio_params_json):
         return f"Link Failed: {str(e)}"
 
 def send_report(target_hex, harvester_nick, block_id, ripe, empty, lat, lon, ts_str, photo_b64):
+    global router, local_destination
     try:
         report_id = f"R{int(time.time())}"
         csv_payload = f"id,harvester_id,block_id,ripe_bunches,empty_bunches,latitude,longitude,timestamp,photo_file\n"
@@ -118,13 +114,8 @@ def send_report(target_hex, harvester_nick, block_id, ripe, empty, lat, lon, ts_
         target = RNS.Destination(dest_id, RNS.Destination.OUT, RNS.Destination.SINGLE, "lxmf", "delivery")
         if dest_id is None: target.hash = dest_hash
         
-        from LXMF import LXMessage
         lxm = LXMessage(target, local_destination, csv_payload, title="Harvest Sync")
-        # Global router must be used
-        from LXMF import LXMRouter
-        # We need to find the router instance or pass it
-        # Simplified for this build
-        RNS.Transport.outbound_lxmf(lxm) # Using transport fallback
+        router.handle_outbound(lxm)
         return "Report Sent"
     except Exception as e:
         return f"Error: {str(e)}"
