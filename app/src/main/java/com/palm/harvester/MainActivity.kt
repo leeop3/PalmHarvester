@@ -13,7 +13,6 @@ import android.provider.MediaStore
 import android.util.Base64
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.activity.result.launch
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
@@ -30,7 +29,7 @@ class MainActivity : AppCompatActivity() {
     private var photoBase64 = ""
     private var lastLocation: Location? = null
 
-    // 1. STABLE CAMERA LAUNCHER (Returns thumbnail directly)
+    // 1. STABLE CAMERA LAUNCHER
     private val takePhoto = registerForActivityResult(ActivityResultContracts.TakePicturePreview()) { bitmap ->
         if (bitmap != null) {
             processImage(bitmap)
@@ -42,7 +41,7 @@ class MainActivity : AppCompatActivity() {
     // 2. PERMISSION LAUNCHER
     private val requestPermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
         if (isGranted) {
-            takePhoto.launch()
+            takePhoto.launch(null) // PASS NULL HERE
         } else {
             Toast.makeText(this, "Camera permission denied", Toast.LENGTH_SHORT).show()
         }
@@ -59,10 +58,9 @@ class MainActivity : AppCompatActivity() {
 
         setupCounters()
         
-        // Check permission before launching camera
         binding.btnPhoto.setOnClickListener { 
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
-                takePhoto.launch()
+                takePhoto.launch(null) // PASS NULL HERE
             } else {
                 requestPermissionLauncher.launch(Manifest.permission.CAMERA)
             }
@@ -88,10 +86,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun processImage(bitmap: Bitmap) {
-        // RESIZE: 100x100 is the limit for LoRa stability
         val scaled = Bitmap.createScaledBitmap(bitmap, 100, 100, false)
         val baos = ByteArrayOutputStream()
-        // WEBP: 50% quality gives us ~3KB strings
         scaled.compress(Bitmap.CompressFormat.WEBP, 50, baos)
         val imageBytes = baos.toByteArray()
         photoBase64 = Base64.encodeToString(imageBytes, Base64.NO_WRAP)
@@ -113,7 +109,7 @@ class MainActivity : AppCompatActivity() {
         val block = binding.editBlockId.text.toString()
 
         if (target.length < 10 || harvester.isEmpty() || block.isEmpty()) {
-            Toast.makeText(this, "Fill all fields and scan receiver address", Toast.LENGTH_SHORT).show(); return
+            Toast.makeText(this, "Fill all fields", Toast.LENGTH_SHORT).show(); return
         }
 
         val lat = lastLocation?.latitude ?: 0.0
