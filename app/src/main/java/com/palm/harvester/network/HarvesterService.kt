@@ -5,9 +5,9 @@ import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothSocket
 import android.content.Context
 import android.content.Intent
-import android.os.Binder
 import android.os.Build
 import android.os.IBinder
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.lifecycle.MutableLiveData
 import com.chaquo.python.Python
@@ -32,7 +32,11 @@ class HarvesterService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_CONNECT) {
-            val device = intent.getParcelableExtra<BluetoothDevice>(EXTRA_DEVICE)
+            val device = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                intent.getParcelableExtra(EXTRA_DEVICE, BluetoothDevice::class.java)
+            } else {
+                @Suppress("DEPRECATION") intent.getParcelableExtra(EXTRA_DEVICE)
+            }
             device?.let { startBridge(it) }
         }
         return START_STICKY
@@ -42,6 +46,10 @@ class HarvesterService : Service() {
         serviceScope.launch(Dispatchers.IO) {
             try {
                 onStatusUpdate("Connecting BT...")
+                btSocket?.close()
+                tcpServer?.close()
+
+                // Use 'Insecure' method for better RNode compatibility
                 val m = device.javaClass.getMethod("createInsecureRfcommSocket", Int::class.javaPrimitiveType)
                 btSocket = m.invoke(device, 1) as BluetoothSocket
                 btSocket?.connect()
@@ -50,41 +58,106 @@ class HarvesterService : Service() {
                 tcpServer?.reuseAddress = true
                 tcpServer?.bind(InetSocketAddress("127.0.0.1", 7633))
                 
-                delay(500)
+                onStatusUpdate("Bridge 7633 Ready")
+                
+                // Trigger Python RNS to link to this port
                 injectPython()
 
                 val client = tcpServer?.accept() ?: return@launch
-                val btIn = btSocket!!.inputStream; val btOut = btSocket!!.outputStream
-                val tcpIn = client.inputStream; val tcpOut = client.outputStream
+                client.tcpNoDelay = true
+                val btIn = btSocket!!.inputStream
+                val btOut = btSocket!!.outputStream
+                val tcpIn = client.inputStream
+                val tcpOut = client.outputServerStream() // Fix for name clash if any
+                val tcpOutReal = client.outputStream
 
-                onStatusUpdate("Mesh Ready")
+                // BT -> TCP Pipe
+                launch {
+                    val buf = ByteArray(2048)
+                    try {
+                        var r = 0 // FIX: Explicitly initialized
+                        while (isActive && btIn.read(buf).also { r = it } != -1) {
+                            if (r > 0) {
+                                tcpOutReal.write(buf, 0, r)
+                                tcpOutReal.flush()
+                            }
+                        }
+                    } catch (e: Exception) { }
+                }
 
-                launch { val b = ByteArray(1024); var r: Int; while(isActive && btIn.read(b).also{r=it}!=-1) { tcpOut.write(b,0,r); tcpOut.flush() } }
-                launch { val b = ByteArray(1024); var r: Int; while(isActive && tcpIn.read(b).also{r=it}!=-1) { btOut.write(b,0,r); btOut.flush() } }
-            } catch (e: Exception) { onStatusUpdate("Bridge Fail") }
+                // TCP -> BT Pipe
+                launch {
+                    val buf = ByteArray(2048)
+                    try {
+                        var r = 0 // FIX: Explicitly initialized
+                        while (isActive && tcpIn.read(buf).also { r = it } != -1) {
+                            if (r > 0) {
+                                btOut.write(buf, 0, r)
+                                btOut.flush()
+                            }
+                        }
+                    } catch (e: Exception) { }
+                }
+
+                onStatusUpdate("Mesh Active")
+
+            } catch (e: Exception) {
+                onStatusUpdate("Bridge Failed")
+                Log.e("PalmHarvester", "Bridge Error", e)
+            }
         }
     }
 
     private fun injectPython() {
         serviceScope.launch {
-            val prefs = getSharedPreferences("radio", Context.MODE_PRIVATE)
-            val json = JSONObject().apply { 
-                put("freq", prefs.getInt("freq", 433000000))
-                put("sf", prefs.getInt("sf", 8))
+            try {
+                val py = Python.getInstance()
+                val prefs = getSharedPreferences("radio", Context.MODE_PRIVATE)
+                val json = JSONObject().apply { 
+                    put("freq", prefs.getInt("freq", 433000000))
+                    put("sf", prefs.getInt("sf", 8))
+                    put("cr", prefs.getInt("cr", 6))
+                    put("tx", prefs.getInt("tx", 17))
+                    put("bw", prefs.getInt("bw", 125000))
+                }
+                py.getModule("rns_engine").callAttr("inject_rnode", json.toString())
+            } catch (e: Exception) {
+                Log.e("PalmHarvester", "Python Injection Error", e)
             }
-            Python.getInstance().getModule("rns_engine").callAttr("inject_rnode", json.toString())
         }
     }
 
     override fun onCreate() {
         super.onCreate()
-        val chan = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            NotificationChannel("h", "Harvester", NotificationManager.IMPORTANCE_LOW).also { getSystemService(NotificationManager::class.java).createNotificationChannel(it) }
-        } else ""
-        startForeground(1, NotificationCompat.Builder(this, "h").setContentTitle("Palm Harvester").setSmallIcon(android.R.drawable.stat_notify_sync).build())
+        createNotificationChannel()
+        startForeground(1, createNotification("RNS Ready"))
+        
         if (!Python.isStarted()) Python.start(AndroidPlatform(this))
-        serviceScope.launch { Python.getInstance().getModule("rns_engine").callAttr("start_engine", this@HarvesterService, filesDir.absolutePath) }
+        serviceScope.launch { 
+            try {
+                Python.getInstance().getModule("rns_engine").callAttr("start_engine", this@HarvesterService, filesDir.absolutePath)
+            } catch (e: Exception) {
+                Log.e("PalmHarvester", "Engine Start Error", e)
+            }
+        }
     }
 
     fun onStatusUpdate(msg: String) { serviceStatus.postValue(msg) }
+
+    private fun createNotification(content: String): Notification {
+        return NotificationCompat.Builder(this, "h")
+            .setContentTitle("Palm Harvester")
+            .setContentText(content)
+            .setSmallIcon(android.R.drawable.stat_notify_sync)
+            .setOngoing(true)
+            .build()
+    }
+
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val chan = NotificationChannel("h", "Harvester Service", NotificationManager.IMPORTANCE_LOW)
+            val manager = getSystemService(NotificationManager::class.java)
+            manager.createNotificationChannel(chan)
+        }
+    }
 }
