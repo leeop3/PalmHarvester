@@ -1,0 +1,2 @@
+rootProject.name = "PalmHarvester"
+include ":app"
