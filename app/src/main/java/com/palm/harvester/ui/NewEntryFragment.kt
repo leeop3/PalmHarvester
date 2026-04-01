@@ -5,12 +5,14 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.net.Uri
 import android.os.*
 import android.util.Base64
 import android.view.View
 import android.widget.*
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import com.google.android.gms.location.*
@@ -19,6 +21,7 @@ import com.palm.harvester.data.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.io.ByteArrayOutputStream
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -26,13 +29,27 @@ class NewEntryFragment : Fragment(R.layout.fragment_new_entry) {
     private var ripe = 0; private var empty = 0
     private var photoB64 = ""
     private var lat = 0.0; private var lon = 0.0
+    private var photoUri: Uri? = null
+    private var tempPhotoFile: File? = null
     private lateinit var fusedLocationClient: FusedLocationProviderClient
 
-    private val takePreview = registerForActivityResult(ActivityResultContracts.TakePicturePreview()) { bitmap: Bitmap? ->
-        if (bitmap != null) {
-            processImage(bitmap)
-            requestFreshLocation() // Capture GPS precisely when photo is taken
+    // 1. THE STABLE FILE CONTRACT
+    private val takePhotoAction = registerForActivityResult(ActivityResultContracts.TakePicture()) { success ->
+        if (success) {
+            tempPhotoFile?.let { file ->
+                val bitmap = BitmapFactory.decodeFile(file.absolutePath)
+                if (bitmap != null) {
+                    processImage(bitmap)
+                    requestFreshLocation()
+                }
+            }
+        } else {
+            Toast.makeText(context, "Photo cancelled", Toast.LENGTH_SHORT).show()
         }
+    }
+
+    private val permissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
+        if (isGranted) launchCamera()
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -50,11 +67,17 @@ class NewEntryFragment : Fragment(R.layout.fragment_new_entry) {
         view.findViewById<Button>(R.id.btnPlusEmpty).setOnClickListener { empty++; tEmpty.text = empty.toString() }
         view.findViewById<Button>(R.id.btnMinusEmpty).setOnClickListener { if(empty > 0) empty--; tEmpty.text = empty.toString() }
 
-        view.findViewById<Button>(R.id.btnPhoto).setOnClickListener { takePreview.launch(null) }
+        view.findViewById<Button>(R.id.btnPhoto).setOnClickListener {
+            if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+                launchCamera()
+            } else {
+                permissionLauncher.launch(Manifest.permission.CAMERA)
+            }
+        }
         
         view.findViewById<Button>(R.id.btnSave).setOnClickListener {
             val block = editBlock.text.toString().trim()
-            if (block.isEmpty()) return@setOnClickListener 
+            if (block.isEmpty()) { Toast.makeText(context, "Enter Block ID", Toast.LENGTH_SHORT).show(); return@setOnClickListener }
 
             lifecycleScope.launch(Dispatchers.IO) {
                 val now = Date()
@@ -71,6 +94,17 @@ class NewEntryFragment : Fragment(R.layout.fragment_new_entry) {
             }
         }
         requestFreshLocation()
+    }
+
+    private fun launchCamera() {
+        try {
+            val photoFile = File.createTempFile("IMG_", ".jpg", requireContext().cacheDir)
+            tempPhotoFile = photoFile
+            photoUri = FileProvider.getUriForFile(requireContext(), "com.palm.harvester.fileprovider", photoFile)
+            takePhotoAction.launch(photoUri)
+        } catch (e: Exception) {
+            Toast.makeText(context, "Camera Error", Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun processImage(bitmap: Bitmap) {
