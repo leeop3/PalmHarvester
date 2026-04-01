@@ -2,11 +2,12 @@ package com.palm.harvester.ui
 
 import android.Manifest
 import android.content.Context
-import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.*
+import android.text.Editable
+import android.text.TextWatcher
 import android.util.Base64
 import android.view.View
 import android.widget.*
@@ -29,47 +30,69 @@ class NewEntryFragment : Fragment(R.layout.fragment_new_entry) {
     private var ripe = 0; private var empty = 0
     private var photoB64 = ""
     private var lat = 0.0; private var lon = 0.0
+    private var editId: Long = -1
     private var currentPhotoPath: String? = null
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private var locationCallback: LocationCallback? = null
 
-    // 1. STABLE CAMERA LAUNCHER
     private val takePhotoAction = registerForActivityResult(ActivityResultContracts.TakePicture()) { success ->
-        if (success && currentPhotoPath != null) {
-            processImageFile(currentPhotoPath!!)
-        } else {
-            Toast.makeText(context, "Photo failed or cancelled", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    // 2. UNIFIED PERMISSION LAUNCHER
-    private val requestPermissions = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { results ->
-        if (results[Manifest.permission.ACCESS_FINE_LOCATION] == true) startLocationUpdates()
-        if (results[Manifest.permission.CAMERA] == true) { /* Ready */ }
+        if (success && currentPhotoPath != null) processImageFile(currentPhotoPath!!)
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(requireActivity())
+        val vibrator = context?.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
         
-        // Request all hardware rights at once
-        requestPermissions.launch(arrayOf(
-            Manifest.permission.CAMERA,
-            Manifest.permission.ACCESS_FINE_LOCATION,
-            Manifest.permission.ACCESS_COARSE_LOCATION
-        ))
-
-        val tRipe = view.findViewById<TextView>(R.id.txtRipeCount)
+        val tRipeManual = view.findViewById<EditText>(R.id.txtRipeManual)
+        val sRipe = view.findViewById<SeekBar>(R.id.seekRipe)
         val tEmpty = view.findViewById<TextView>(R.id.txtEmptyCount)
         val editBlock = view.findViewById<EditText>(R.id.editBlockId)
         val btnSave = view.findViewById<Button>(R.id.btnSave)
+        val lblTitle = view.findViewById<TextView>(R.id.lblFormTitle)
 
-        // Load last block from memory
-        val prefs = requireContext().getSharedPreferences("harvester_prefs", Context.MODE_PRIVATE)
-        editBlock.setText(prefs.getString("last_block", ""))
+        // 1. Check for EDIT MODE
+        editId = arguments?.getLong("edit_id", -1) ?: -1
+        if (editId != -1L) {
+            lblTitle.text = "EDIT HARVEST RECORD"
+            btnSave.text = "UPDATE"
+            lifecycleScope.launch(Dispatchers.IO) {
+                val entry = AppDatabase.getInstance(requireContext()).harvestDao().getAllEntriesOnce().find { it.id == editId }
+                entry?.let {
+                    launch(Dispatchers.Main) {
+                        editBlock.setText(it.blockId)
+                        ripe = it.ripeCount; empty = it.emptyCount
+                        sRipe.progress = ripe; tRipeManual.setText(ripe.toString())
+                        tEmpty.text = empty.toString()
+                        photoB64 = it.photoBase64
+                        lat = it.latitude; lon = it.longitude
+                    }
+                }
+            }
+        } else {
+            val prefs = requireContext().getSharedPreferences("harvester_prefs", Context.MODE_PRIVATE)
+            editBlock.setText(prefs.getString("last_block", ""))
+        }
 
-        view.findViewById<Button>(R.id.btnPlusRipe).setOnClickListener { ripe++; tRipe.text = ripe.toString() }
-        view.findViewById<Button>(R.id.btnMinusRipe).setOnClickListener { if(ripe > 0) ripe--; tRipe.text = ripe.toString() }
+        // 2. Hybrid Slider/Manual Logic
+        sRipe.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(sb: SeekBar?, p: Int, fromUser: Boolean) {
+                if (fromUser) { ripe = p; tRipeManual.setText(p.toString()) }
+            }
+            override fun onStartTrackingTouch(p0: SeekBar?) {}
+            override fun onStopTrackingTouch(p0: SeekBar?) {}
+        })
+
+        tRipeManual.addTextChangedListener(object : TextWatcher {
+            override fun afterTextChanged(s: Editable?) {
+                val v = s.toString().toIntOrNull() ?: 0
+                if (v != sRipe.progress) { ripe = v; sRipe.progress = v }
+            }
+            override fun beforeTextChanged(p0: CharSequence?, p1: Int, p2: Int, p3: Int) {}
+            override fun onTextChanged(p0: CharSequence?, p1: Int, p2: Int, p3: Int) {}
+        })
+
+        // 3. Simple +/- for Empty
         view.findViewById<Button>(R.id.btnPlusEmpty).setOnClickListener { empty++; tEmpty.text = empty.toString() }
         view.findViewById<Button>(R.id.btnMinusEmpty).setOnClickListener { if(empty > 0) empty--; tEmpty.text = empty.toString() }
 
@@ -78,72 +101,55 @@ class NewEntryFragment : Fragment(R.layout.fragment_new_entry) {
         
         btnSave.setOnClickListener {
             val block = editBlock.text.toString().trim()
-            if (block.isEmpty()) { Toast.makeText(context, "Enter Block ID", Toast.LENGTH_SHORT).show(); return@setOnClickListener }
-            if (lat == 0.0) { Toast.makeText(context, "Waiting for GPS Fix...", Toast.LENGTH_SHORT).show(); return@setOnClickListener }
+            if (block.isEmpty()) return@setOnClickListener 
+            if (lat == 0.0 && editId == -1L) { Toast.makeText(context, "Waiting for GPS Fix...", Toast.LENGTH_SHORT).show(); return@setOnClickListener }
 
             lifecycleScope.launch(Dispatchers.IO) {
                 val now = Date()
                 val entry = HarvestEntry(
+                    id = if(editId != -1L) editId else 0,
                     blockId = block, ripeCount = ripe, emptyCount = empty,
                     latitude = lat, longitude = lon, 
                     timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(now),
                     reportDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(now), 
-                    photoBase64 = photoB64
+                    photoBase64 = photoB64,
+                    isSynced = false // Reset sync status if edited
                 )
-                AppDatabase.getInstance(requireContext()).harvestDao().insert(entry)
-                prefs.edit().putString("last_block", block).apply()
-                launch(Dispatchers.Main) { requireActivity().onBackPressedDispatcher.onBackPressed() }
+                if (editId != -1L) AppDatabase.getInstance(requireContext()).harvestDao().update(entry)
+                else AppDatabase.getInstance(requireContext()).harvestDao().insert(entry)
+                
+                requireContext().getSharedPreferences("harvester_prefs", Context.MODE_PRIVATE).edit().putString("last_block", block).apply()
+                launch(Dispatchers.Main) { 
+                    vibrator?.vibrate(VibrationEffect.createOneShot(150, VibrationEffect.DEFAULT_AMPLITUDE))
+                    requireActivity().onBackPressedDispatcher.onBackPressed() 
+                }
             }
         }
-    }
-
-    private fun startLocationUpdates() {
-        if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) return
-        
-        val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 2000)
-            .setMinUpdateDistanceMeters(1f)
-            .build()
-
-        locationCallback = object : LocationCallback() {
-            override fun onLocationResult(result: LocationResult) {
-                val loc = result.lastLocation ?: return
-                lat = loc.latitude
-                lon = loc.longitude
-                // Optional: show a tiny toast or update UI to show GPS is active
-            }
-        }
-        fusedLocationClient.requestLocationUpdates(request, locationCallback!!, Looper.getMainLooper())
+        startLocationUpdates()
     }
 
     private fun launchCamera() {
-        try {
-            val file = File(requireContext().cacheDir, "temp_harvest.jpg")
-            if (file.exists()) file.delete()
-            file.createNewFile()
-            currentPhotoPath = file.absolutePath
-            val uri = FileProvider.getUriForFile(requireContext(), "com.palm.harvester.fileprovider", file)
-            takePhotoAction.launch(uri)
-        } catch (e: Exception) {
-            Toast.makeText(context, "Camera Error: ${e.message}", Toast.LENGTH_SHORT).show()
-        }
+        val file = File(requireContext().cacheDir, "temp_harvest.jpg")
+        currentPhotoPath = file.absolutePath
+        val uri = FileProvider.getUriForFile(requireContext(), "com.palm.harvester.fileprovider", file)
+        takePhotoAction.launch(uri)
     }
 
     private fun processImageFile(path: String) {
-        // Use sampling to prevent OOM crash
-        val options = BitmapFactory.Options().apply { inSampleSize = 4 }
-        val bitmap = BitmapFactory.decodeFile(path, options) ?: return
-        
-        // Scale to LoRa-safe size
+        val bitmap = BitmapFactory.decodeFile(path, BitmapFactory.Options().apply { inSampleSize = 4 }) ?: return
         val scaled = Bitmap.createScaledBitmap(bitmap, 100, 100, false)
         val baos = ByteArrayOutputStream()
         scaled.compress(Bitmap.CompressFormat.WEBP, 50, baos)
         photoB64 = Base64.encodeToString(baos.toByteArray(), Base64.NO_WRAP)
-        
         view?.findViewById<ImageView>(R.id.imgPreview)?.setImageBitmap(scaled)
     }
 
-    override fun onDestroyView() {
-        super.onDestroyView()
-        locationCallback?.let { fusedLocationClient.removeLocationUpdates(it) }
+    private fun startLocationUpdates() {
+        if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) return
+        val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 2000).build()
+        locationCallback = object : LocationCallback() {
+            override fun onLocationResult(res: LocationResult) { lat = res.lastLocation?.latitude ?: lat; lon = res.lastLocation?.longitude ?: lon }
+        }
+        LocationServices.getFusedLocationProviderClient(requireActivity()).requestLocationUpdates(request, locationCallback!!, Looper.getMainLooper())
     }
 }

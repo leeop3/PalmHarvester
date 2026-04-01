@@ -1,35 +1,30 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent" android:layout_height="match_parent"
     android:orientation="vertical" android:padding="16dp" android:background="#FFFFFF">
     
-    <androidx.cardview.widget.CardView xmlns:app="http://schemas.android.com/apk/res-auto"
+    <androidx.cardview.widget.CardView 
         android:layout_width="match_parent" android:layout_height="wrap_content" 
-        android:layout_marginBottom="16dp" app:cardCornerRadius="12dp" app:cardElevation="4dp">
-        
+        android:layout_marginBottom="24dp" app:cardCornerRadius="12dp" app:cardElevation="4dp">
         <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" 
             android:orientation="vertical" android:padding="20dp">
-            
             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" 
                 android:text="Today's Progress" android:textSize="18sp" android:textColor="#666666"/>
-                
             <TextView android:id="@+id/txtTodayTotal" android:layout_width="wrap_content" 
                 android:layout_height="wrap_content" android:text="0 Bunches" 
                 android:textSize="36sp" android:textStyle="bold" android:textColor="#1B5E20"/>
-                
             <TextView android:id="@+id/txtTodayStats" android:layout_width="wrap_content" 
-                android:layout_height="wrap_content" android:text="Ripe: 0 | Empty: 0" 
-                android:textSize="16sp" android:textColor="#444444" android:layout_marginTop="4dp"/>
-
-            <View android:layout_width="match_parent" android:layout_height="1dp" 
-                android:background="#EEEEEE" android:layout_marginVertical="12dp"/>
-
+                android:layout_height="wrap_content" android:text="No records today" 
+                android:textSize="16sp" android:textColor="#444444"/>
             <TextView android:id="@+id/txtLastGps" android:layout_width="wrap_content" 
                 android:layout_height="wrap_content" android:text="GPS: Waiting..." 
-                android:textSize="13sp" android:textColor="#1976D2"/>
+                android:textSize="13sp" android:textColor="#1976D2" android:layout_marginTop="8dp"/>
         </LinearLayout>
     </androidx.cardview.widget.CardView>
 
-    <Button android:id="@+id/btnNewEntry" android:layout_width="match_parent" 
-        android:layout_height="80dp" android:text="+ NEW HARVEST ENTRY" 
-        android:textSize="18sp" android:backgroundTint="#1B5E20" android:textStyle="bold"/>
+    <Button android:id="@+id/btnNewEntry" 
+        android:layout_width="match_parent" android:layout_height="120dp" 
+        android:text="+ NEW HARVEST ENTRY" android:textSize="22sp" 
+        android:textStyle="bold" android:textColor="#FFFFFF"
+        android:backgroundTint="#1B5E20" app:cornerRadius="12dp"/>
 </LinearLayout>
