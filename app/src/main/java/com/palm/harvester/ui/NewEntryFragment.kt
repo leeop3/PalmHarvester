@@ -28,7 +28,6 @@ class NewEntryFragment : Fragment(R.layout.fragment_new_entry) {
     private var ripe = 0; private var empty = 0
     private var photoB64 = ""
     private var lat = 0.0; private var lon = 0.0
-    private var vibrator: Vibrator? = null
 
     private val cameraLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
@@ -40,7 +39,8 @@ class NewEntryFragment : Fragment(R.layout.fragment_new_entry) {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         
-        vibrator = requireContext().getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+        // SAFE VIBRATOR ACCESS
+        val vibrator = context?.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
 
         val tRipe = view.findViewById<TextView>(R.id.txtRipeCount)
         val tEmpty = view.findViewById<TextView>(R.id.txtEmptyCount)
@@ -49,30 +49,36 @@ class NewEntryFragment : Fragment(R.layout.fragment_new_entry) {
         val prefs = requireContext().getSharedPreferences("harvester_prefs", Context.MODE_PRIVATE)
         editBlock.setText(prefs.getString("last_block", ""))
 
-        fun doVibrate(ms: Long) {
+        fun vibrate(duration: Long = 50) {
             try {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    vibrator?.vibrate(VibrationEffect.createOneShot(ms, VibrationEffect.DEFAULT_AMPLITUDE))
-                } else {
-                    vibrator?.vibrate(ms)
+                if (vibrator?.hasVibrator() == true) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        vibrator.vibrate(VibrationEffect.createOneShot(duration, VibrationEffect.DEFAULT_AMPLITUDE))
+                    } else {
+                        vibrator.vibrate(duration)
+                    }
                 }
             } catch (e: Exception) {}
         }
 
-        view.findViewById<Button>(R.id.btnPlusRipe).setOnClickListener { doVibrate(40); ripe++; tRipe.text = ripe.toString() }
-        view.findViewById<Button>(R.id.btnMinusRipe).setOnClickListener { doVibrate(40); if(ripe > 0) ripe--; tRipe.text = ripe.toString() }
-        view.findViewById<Button>(R.id.btnPlusEmpty).setOnClickListener { doVibrate(40); empty++; tEmpty.text = empty.toString() }
-        view.findViewById<Button>(R.id.btnMinusEmpty).setOnClickListener { doVibrate(40); if(empty > 0) empty--; tEmpty.text = empty.toString() }
+        view.findViewById<Button>(R.id.btnPlusRipe).setOnClickListener { vibrate(); ripe++; tRipe.text = ripe.toString() }
+        view.findViewById<Button>(R.id.btnMinusRipe).setOnClickListener { vibrate(); if(ripe > 0) ripe--; tRipe.text = ripe.toString() }
+        view.findViewById<Button>(R.id.btnPlusEmpty).setOnClickListener { vibrate(); empty++; tEmpty.text = empty.toString() }
+        view.findViewById<Button>(R.id.btnMinusEmpty).setOnClickListener { vibrate(); if(empty > 0) empty--; tEmpty.text = empty.toString() }
 
         view.findViewById<Button>(R.id.btnPhoto).setOnClickListener {
             val cameraIntent = Intent(MediaStore.ACTION_IMAGE_CAPTURE)
             cameraLauncher.launch(cameraIntent)
         }
         
+        view.findViewById<Button>(R.id.btnCancel).setOnClickListener { 
+            requireActivity().onBackPressedDispatcher.onBackPressed() 
+        }
+        
         view.findViewById<Button>(R.id.btnSave).setOnClickListener {
             val block = editBlock.text.toString().trim()
             if (block.isEmpty()) {
-                Toast.makeText(context, "Enter Block ID", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Please enter Block ID", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener 
             }
 
@@ -89,7 +95,7 @@ class NewEntryFragment : Fragment(R.layout.fragment_new_entry) {
                 prefs.edit().putString("last_block", block).apply()
 
                 launch(Dispatchers.Main) { 
-                    doVibrate(150)
+                    vibrate(150) // Success vibration
                     requireActivity().onBackPressedDispatcher.onBackPressed()
                 }
             }
