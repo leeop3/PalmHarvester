@@ -22,7 +22,6 @@ class AnalyticsFragment : Fragment(R.layout.fragment_analytics) {
 
         val currentMonth = SimpleDateFormat("yyyy-MM", Locale.getDefault()).format(Date())
 
-        // 1. Observe Monthly Totals
         db.harvestDao().getSummaryForMonth(currentMonth).observe(viewLifecycleOwner) { summary: DaySummary? ->
             summary?.let {
                 txtMonthTotal.text = "Total: ${it.totalBunches} Bunches"
@@ -30,16 +29,18 @@ class AnalyticsFragment : Fragment(R.layout.fragment_analytics) {
             }
         }
 
-        // 2. Observe Block Aggregation
         db.harvestDao().getBlockSummaryForMonth(currentMonth).observe(viewLifecycleOwner) { list ->
             if (!list.isNullOrEmpty()) {
                 val sb = StringBuilder()
-                list.forEach { sb.append("Block ${it.blockId}: ${it.totalBunches} bunches\n") }
+                list.forEach { 
+                    sb.append("• Block ${it.blockId}: ${it.totalBunches} bunches\n") 
+                }
                 txtBlocks.text = sb.toString()
+            } else {
+                txtBlocks.text = "No data for this month."
             }
         }
 
-        // 3. Calendar Click Logic
         calendar.setOnDateChangeListener { _, year, month, dayOfMonth ->
             val selectedDate = String.format("%04d-%02d-%02d", year, month + 1, dayOfMonth)
             showDateDetails(selectedDate)
@@ -50,14 +51,17 @@ class AnalyticsFragment : Fragment(R.layout.fragment_analytics) {
         val db = AppDatabase.getInstance(requireContext())
         db.harvestDao().getSummaryForDate(date).observe(viewLifecycleOwner) { summary ->
             val msg = if (summary != null && summary.entryCount > 0) {
-                "Total: ${summary.totalBunches}\nRipe: ${summary.totalRipe}\nEmpty: ${summary.totalEmpty}\nRecords: ${summary.entryCount}"
+                "Total Bunches: ${summary.totalBunches}\n" +
+                "Ripe: ${summary.totalRipe}\n" +
+                "Empty: ${summary.totalEmpty}\n" +
+                "Entries: ${summary.entryCount}"
             } else {
                 "No harvest records for this date."
             }
             AlertDialog.Builder(requireContext())
-                .setTitle("Details for $date")
+                .setTitle("Report: $date")
                 .setMessage(msg)
-                .setPositiveButton("Close", null)
+                .setPositiveButton("OK", null)
                 .show()
         }
     }
