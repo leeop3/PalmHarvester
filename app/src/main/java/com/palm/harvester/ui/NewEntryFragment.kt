@@ -29,27 +29,17 @@ class NewEntryFragment : Fragment(R.layout.fragment_new_entry) {
     private var ripe = 0; private var empty = 0
     private var photoB64 = ""
     private var lat = 0.0; private var lon = 0.0
-    private var photoUri: Uri? = null
     private var tempPhotoFile: File? = null
     private lateinit var fusedLocationClient: FusedLocationProviderClient
+    private var locationCallback: LocationCallback? = null
 
-    // 1. THE STABLE FILE CONTRACT
     private val takePhotoAction = registerForActivityResult(ActivityResultContracts.TakePicture()) { success ->
         if (success) {
             tempPhotoFile?.let { file ->
                 val bitmap = BitmapFactory.decodeFile(file.absolutePath)
-                if (bitmap != null) {
-                    processImage(bitmap)
-                    requestFreshLocation()
-                }
+                if (bitmap != null) processImage(bitmap)
             }
-        } else {
-            Toast.makeText(context, "Photo cancelled", Toast.LENGTH_SHORT).show()
         }
-    }
-
-    private val permissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
-        if (isGranted) launchCamera()
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -58,26 +48,28 @@ class NewEntryFragment : Fragment(R.layout.fragment_new_entry) {
         
         val tRipe = view.findViewById<TextView>(R.id.txtRipeCount)
         val tEmpty = view.findViewById<TextView>(R.id.txtEmptyCount)
-        val editBlock = view.findViewById<EditText>(R.id.editBlockId)
-        val prefs = requireContext().getSharedPreferences("harvester_prefs", Context.MODE_PRIVATE)
-        editBlock.setText(prefs.getString("last_block", ""))
+        val btnSave = view.findViewById<Button>(R.id.btnSave)
+        
+        // Start GPS tracking immediately
+        startLocationUpdates()
 
         view.findViewById<Button>(R.id.btnPlusRipe).setOnClickListener { ripe++; tRipe.text = ripe.toString() }
         view.findViewById<Button>(R.id.btnMinusRipe).setOnClickListener { if(ripe > 0) ripe--; tRipe.text = ripe.toString() }
         view.findViewById<Button>(R.id.btnPlusEmpty).setOnClickListener { empty++; tEmpty.text = empty.toString() }
         view.findViewById<Button>(R.id.btnMinusEmpty).setOnClickListener { if(empty > 0) empty--; tEmpty.text = empty.toString() }
 
-        view.findViewById<Button>(R.id.btnPhoto).setOnClickListener {
-            if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
-                launchCamera()
-            } else {
-                permissionLauncher.launch(Manifest.permission.CAMERA)
-            }
-        }
+        view.findViewById<Button>(R.id.btnPhoto).setOnClickListener { launchCamera() }
+        view.findViewById<Button>(R.id.btnCancel).setOnClickListener { requireActivity().onBackPressedDispatcher.onBackPressed() }
         
-        view.findViewById<Button>(R.id.btnSave).setOnClickListener {
-            val block = editBlock.text.toString().trim()
+        btnSave.setOnClickListener {
+            val block = view.findViewById<EditText>(R.id.editBlockId).text.toString().trim()
             if (block.isEmpty()) { Toast.makeText(context, "Enter Block ID", Toast.LENGTH_SHORT).show(); return@setOnClickListener }
+            
+            // Prevent saving if GPS is still 0
+            if (lat == 0.0) {
+                Toast.makeText(context, "Waiting for GPS fix...", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
 
             lifecycleScope.launch(Dispatchers.IO) {
                 val now = Date()
@@ -89,22 +81,32 @@ class NewEntryFragment : Fragment(R.layout.fragment_new_entry) {
                     photoBase64 = photoB64
                 )
                 AppDatabase.getInstance(requireContext()).harvestDao().insert(entry)
-                prefs.edit().putString("last_block", block).apply()
                 launch(Dispatchers.Main) { requireActivity().onBackPressedDispatcher.onBackPressed() }
             }
         }
-        requestFreshLocation()
+    }
+
+    private fun startLocationUpdates() {
+        if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 2000).build()
+            locationCallback = object : LocationCallback() {
+                override fun onLocationResult(locationResult: LocationResult) {
+                    val last = locationResult.lastLocation
+                    if (last != null) {
+                        lat = last.latitude
+                        lon = last.longitude
+                    }
+                }
+            }
+            fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback!!, Looper.getMainLooper())
+        }
     }
 
     private fun launchCamera() {
-        try {
-            val photoFile = File.createTempFile("IMG_", ".jpg", requireContext().cacheDir)
-            tempPhotoFile = photoFile
-            photoUri = FileProvider.getUriForFile(requireContext(), "com.palm.harvester.fileprovider", photoFile)
-            takePhotoAction.launch(photoUri)
-        } catch (e: Exception) {
-            Toast.makeText(context, "Camera Error", Toast.LENGTH_SHORT).show()
-        }
+        val photoFile = File.createTempFile("IMG_", ".jpg", requireContext().cacheDir)
+        tempPhotoFile = photoFile
+        val uri = FileProvider.getUriForFile(requireContext(), "com.palm.harvester.fileprovider", photoFile)
+        takePhotoAction.launch(uri)
     }
 
     private fun processImage(bitmap: Bitmap) {
@@ -115,16 +117,8 @@ class NewEntryFragment : Fragment(R.layout.fragment_new_entry) {
         view?.findViewById<ImageView>(R.id.imgPreview)?.setImageBitmap(scaled)
     }
 
-    private fun requestFreshLocation() {
-        if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-            val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1000).setMaxUpdates(1).build()
-            fusedLocationClient.requestLocationUpdates(request, object : LocationCallback() {
-                override fun onLocationResult(result: LocationResult) {
-                    val location = result.lastLocation
-                    lat = location?.latitude ?: 0.0
-                    lon = location?.longitude ?: 0.0
-                }
-            }, Looper.getMainLooper())
-        }
+    override fun onDestroyView() {
+        super.onDestroyView()
+        locationCallback?.let { fusedLocationClient.removeLocationUpdates(it) }
     }
 }
