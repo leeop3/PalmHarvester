@@ -32,12 +32,26 @@ class NewEntryFragment : Fragment(R.layout.fragment_new_entry) {
     private var photoB64 = ""
     private var lat = 0.0; private var lon = 0.0
     private var editId: Long = -1
-    private var currentPhotoPath: String? = null
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private var locationCallback: LocationCallback? = null
 
+    // 1. FIXED FILENAME: This ensures the path is never null after an app restart
+    private fun getTempFile(): File {
+        val dir = File(requireContext().cacheDir, "camera")
+        if (!dir.exists()) dir.mkdirs()
+        return File(dir, "last_photo.jpg")
+    }
+
     private val takePhotoAction = registerForActivityResult(ActivityResultContracts.TakePicture()) { success ->
-        if (success && currentPhotoPath != null) processImageFile(currentPhotoPath!!)
+        if (success) {
+            processImageFile(getTempFile())
+        } else {
+            Toast.makeText(context, "Photo cancelled", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private val requestPermissions = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { results ->
+        if (results[Manifest.permission.ACCESS_FINE_LOCATION] == true) startLocationUpdates()
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -52,12 +66,14 @@ class NewEntryFragment : Fragment(R.layout.fragment_new_entry) {
         val btnSave = view.findViewById<Button>(R.id.btnSave)
         val lblTitle = view.findViewById<TextView>(R.id.lblFormTitle)
 
+        // Request permissions immediately
+        requestPermissions.launch(arrayOf(Manifest.permission.CAMERA, Manifest.permission.ACCESS_FINE_LOCATION))
+
         editId = arguments?.getLong("edit_id", -1) ?: -1
         if (editId != -1L) {
             lblTitle.text = "EDIT HARVEST RECORD"
             btnSave.text = "UPDATE"
             lifecycleScope.launch(Dispatchers.IO) {
-                // FIX: Use the new specific DAO method
                 val entry = AppDatabase.getInstance(requireContext()).harvestDao().getEntryById(editId)
                 entry?.let { record ->
                     launch(Dispatchers.Main) {
@@ -76,9 +92,7 @@ class NewEntryFragment : Fragment(R.layout.fragment_new_entry) {
         }
 
         sRipe.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-            override fun onProgressChanged(sb: SeekBar?, p: Int, fromUser: Boolean) {
-                if (fromUser) { ripe = p; tRipeManual.setText(p.toString()) }
-            }
+            override fun onProgressChanged(sb: SeekBar?, p: Int, fromUser: Boolean) { if (fromUser) { ripe = p; tRipeManual.setText(p.toString()) } }
             override fun onStartTrackingTouch(p0: SeekBar?) {}
             override fun onStopTrackingTouch(p0: SeekBar?) {}
         })
@@ -100,7 +114,7 @@ class NewEntryFragment : Fragment(R.layout.fragment_new_entry) {
         
         btnSave.setOnClickListener {
             val block = editBlock.text.toString().trim()
-            if (block.isEmpty()) return@setOnClickListener 
+            if (block.isEmpty()) { Toast.makeText(context, "Enter Block ID", Toast.LENGTH_SHORT).show(); return@setOnClickListener }
             if (lat == 0.0 && editId == -1L) { Toast.makeText(context, "Waiting for GPS Fix...", Toast.LENGTH_SHORT).show(); return@setOnClickListener }
 
             lifecycleScope.launch(Dispatchers.IO) {
@@ -119,9 +133,7 @@ class NewEntryFragment : Fragment(R.layout.fragment_new_entry) {
                 
                 requireContext().getSharedPreferences("harvester_prefs", Context.MODE_PRIVATE).edit().putString("last_block", block).apply()
                 launch(Dispatchers.Main) { 
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        vibrator?.vibrate(VibrationEffect.createOneShot(150, VibrationEffect.DEFAULT_AMPLITUDE))
-                    }
+                    try { vibrator?.vibrate(VibrationEffect.createOneShot(100, VibrationEffect.DEFAULT_AMPLITUDE)) } catch(e:Exception){}
                     requireActivity().onBackPressedDispatcher.onBackPressed() 
                 }
             }
@@ -130,27 +142,47 @@ class NewEntryFragment : Fragment(R.layout.fragment_new_entry) {
     }
 
     private fun launchCamera() {
-        val file = File(requireContext().cacheDir, "temp_harvest.jpg")
-        currentPhotoPath = file.absolutePath
-        val uri = FileProvider.getUriForFile(requireContext(), "com.palm.harvester.fileprovider", file)
-        takePhotoAction.launch(uri)
+        try {
+            val photoFile = getTempFile()
+            if (photoFile.exists()) photoFile.delete()
+            photoFile.createNewFile()
+            val uri = FileProvider.getUriForFile(requireContext(), "com.palm.harvester.fileprovider", photoFile)
+            takePhotoAction.launch(uri)
+        } catch (e: Exception) {
+            Toast.makeText(context, "Camera Error: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
     }
 
-    private fun processImageFile(path: String) {
-        val bitmap = BitmapFactory.decodeFile(path, BitmapFactory.Options().apply { inSampleSize = 4 }) ?: return
-        val scaled = Bitmap.createScaledBitmap(bitmap, 100, 100, false)
-        val baos = ByteArrayOutputStream()
-        scaled.compress(Bitmap.CompressFormat.WEBP, 50, baos)
-        photoB64 = Base64.encodeToString(baos.toByteArray(), Base64.NO_WRAP)
-        view?.findViewById<ImageView>(R.id.imgPreview)?.setImageBitmap(scaled)
+    private fun processImageFile(file: File) {
+        try {
+            // Memory safe decoding
+            val options = BitmapFactory.Options().apply { inSampleSize = 4 }
+            val bitmap = BitmapFactory.decodeFile(file.absolutePath, options) ?: return
+            
+            val scaled = Bitmap.createScaledBitmap(bitmap, 100, 100, false)
+            val baos = ByteArrayOutputStream()
+            scaled.compress(Bitmap.CompressFormat.WEBP, 50, baos)
+            photoB64 = Base64.encodeToString(baos.toByteArray(), Base64.NO_WRAP)
+            
+            view?.findViewById<ImageView>(R.id.imgPreview)?.setImageBitmap(scaled)
+        } catch(e: Exception) {
+            Toast.makeText(context, "Image Processing Failed", Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun startLocationUpdates() {
         if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) return
         val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 2000).build()
         locationCallback = object : LocationCallback() {
-            override fun onLocationResult(res: LocationResult) { lat = res.lastLocation?.latitude ?: lat; lon = res.lastLocation?.longitude ?: lon }
+            override fun onLocationResult(res: LocationResult) { 
+                res.lastLocation?.let { lat = it.latitude; lon = it.longitude } 
+            }
         }
-        LocationServices.getFusedLocationProviderClient(requireActivity()).requestLocationUpdates(request, locationCallback!!, Looper.getMainLooper())
+        fusedLocationClient.requestLocationUpdates(request, locationCallback!!, Looper.getMainLooper())
+    }
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+        locationCallback?.let { fusedLocationClient.removeLocationUpdates(it) }
     }
 }
