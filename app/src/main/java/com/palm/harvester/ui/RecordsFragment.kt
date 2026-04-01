@@ -32,7 +32,7 @@ class RecordsFragment : Fragment(R.layout.fragment_records) {
     private fun confirmDelete(entry: HarvestEntry) {
         AlertDialog.Builder(requireContext())
             .setTitle("Delete Record?")
-            .setMessage("This will remove the entry from your logs.")
+            .setMessage("This will remove this entry from your daily logs.")
             .setPositiveButton("Delete") { _, _ ->
                 lifecycleScope.launch { AppDatabase.getInstance(requireContext()).harvestDao().delete(entry) }
             }
@@ -45,9 +45,9 @@ class RecordAdapter(val onDeleteClick: (HarvestEntry) -> Unit) : ListAdapter<Har
     class VH(v: View) : RecyclerView.ViewHolder(v) {
         val block: TextView = v.findViewById(R.id.recBlock)
         val stats: TextView = v.findViewById(R.id.recStats)
-        val gps: TextView = v.findViewById(R.id.recGps)
+        val gps: TextView = v.findViewById(R.id.recGpsDisplay)
         val img: ImageView = v.findViewById(R.id.recImg)
-        val btnDel: ImageButton = v.findViewById(R.id.btnDelete)
+        val btnDel: ImageButton = v.findViewById(R.id.btnDeleteRecord)
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
@@ -59,7 +59,10 @@ class RecordAdapter(val onDeleteClick: (HarvestEntry) -> Unit) : ListAdapter<Har
         val item = getItem(position)
         holder.block.text = "Block: ${item.blockId}"
         holder.stats.text = "Ripe: ${item.ripeCount} | Empty: ${item.emptyCount} | Total: ${item.ripeCount + item.emptyCount}"
-        holder.gps.text = "GPS: ${String.format("%.4f", item.latitude)}, ${String.format("%.4f", item.longitude)} | ${item.timestamp}"
+        
+        // Ensure GPS and Time are displayed
+        val coords = "GPS: ${String.format("%.5f", item.latitude)}, ${String.format("%.5f", item.longitude)}"
+        holder.gps.text = "$coords | ${item.timestamp.split(" ").last()}"
         
         if (item.photoBase64.isNotEmpty()) {
             try {
