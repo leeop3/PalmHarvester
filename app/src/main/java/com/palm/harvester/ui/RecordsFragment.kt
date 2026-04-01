@@ -8,7 +8,10 @@ import android.widget.*
 import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
-import androidx.recyclerview.widget.*
+import androidx.recyclerview.widget.DiffUtil
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.ListAdapter
+import androidx.recyclerview.widget.RecyclerView
 import com.palm.harvester.R
 import com.palm.harvester.data.*
 import kotlinx.coroutines.launch
@@ -41,7 +44,10 @@ class RecordAdapter(val onDelete: (HarvestEntry) -> Unit, val onEdit: (HarvestEn
         val block: TextView = v.findViewById(R.id.recBlock); val stats: TextView = v.findViewById(R.id.recStats)
         val gps: TextView = v.findViewById(R.id.recGpsDisplay); val img: ImageView = v.findViewById(R.id.recImg); val btnDel: ImageButton = v.findViewById(R.id.btnDeleteRecord)
     }
-    override fun onCreateViewHolder(p: ViewGroup, t: Int) = VH(LayoutInflater.from(p.context).inflate(R.layout.item_record, p, false))
+    override fun onCreateViewHolder(p: ViewGroup, t: Int): VH {
+        val view = LayoutInflater.from(p.context).inflate(R.layout.item_record, p, false)
+        return VH(view)
+    }
     override fun onBindViewHolder(h: VH, p: Int) {
         val i = getItem(p)
         h.block.text = i.blockId

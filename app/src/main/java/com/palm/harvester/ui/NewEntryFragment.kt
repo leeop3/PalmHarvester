@@ -2,6 +2,7 @@ package com.palm.harvester.ui
 
 import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
@@ -51,21 +52,21 @@ class NewEntryFragment : Fragment(R.layout.fragment_new_entry) {
         val btnSave = view.findViewById<Button>(R.id.btnSave)
         val lblTitle = view.findViewById<TextView>(R.id.lblFormTitle)
 
-        // 1. Check for EDIT MODE
         editId = arguments?.getLong("edit_id", -1) ?: -1
         if (editId != -1L) {
             lblTitle.text = "EDIT HARVEST RECORD"
             btnSave.text = "UPDATE"
             lifecycleScope.launch(Dispatchers.IO) {
-                val entry = AppDatabase.getInstance(requireContext()).harvestDao().getAllEntriesOnce().find { it.id == editId }
-                entry?.let {
+                // FIX: Use the new specific DAO method
+                val entry = AppDatabase.getInstance(requireContext()).harvestDao().getEntryById(editId)
+                entry?.let { record ->
                     launch(Dispatchers.Main) {
-                        editBlock.setText(it.blockId)
-                        ripe = it.ripeCount; empty = it.emptyCount
+                        editBlock.setText(record.blockId)
+                        ripe = record.ripeCount; empty = record.emptyCount
                         sRipe.progress = ripe; tRipeManual.setText(ripe.toString())
                         tEmpty.text = empty.toString()
-                        photoB64 = it.photoBase64
-                        lat = it.latitude; lon = it.longitude
+                        photoB64 = record.photoBase64
+                        lat = record.latitude; lon = record.longitude
                     }
                 }
             }
@@ -74,7 +75,6 @@ class NewEntryFragment : Fragment(R.layout.fragment_new_entry) {
             editBlock.setText(prefs.getString("last_block", ""))
         }
 
-        // 2. Hybrid Slider/Manual Logic
         sRipe.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(sb: SeekBar?, p: Int, fromUser: Boolean) {
                 if (fromUser) { ripe = p; tRipeManual.setText(p.toString()) }
@@ -92,7 +92,6 @@ class NewEntryFragment : Fragment(R.layout.fragment_new_entry) {
             override fun onTextChanged(p0: CharSequence?, p1: Int, p2: Int, p3: Int) {}
         })
 
-        // 3. Simple +/- for Empty
         view.findViewById<Button>(R.id.btnPlusEmpty).setOnClickListener { empty++; tEmpty.text = empty.toString() }
         view.findViewById<Button>(R.id.btnMinusEmpty).setOnClickListener { if(empty > 0) empty--; tEmpty.text = empty.toString() }
 
@@ -113,14 +112,16 @@ class NewEntryFragment : Fragment(R.layout.fragment_new_entry) {
                     timestamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(now),
                     reportDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(now), 
                     photoBase64 = photoB64,
-                    isSynced = false // Reset sync status if edited
+                    isSynced = false
                 )
                 if (editId != -1L) AppDatabase.getInstance(requireContext()).harvestDao().update(entry)
                 else AppDatabase.getInstance(requireContext()).harvestDao().insert(entry)
                 
                 requireContext().getSharedPreferences("harvester_prefs", Context.MODE_PRIVATE).edit().putString("last_block", block).apply()
                 launch(Dispatchers.Main) { 
-                    vibrator?.vibrate(VibrationEffect.createOneShot(150, VibrationEffect.DEFAULT_AMPLITUDE))
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        vibrator?.vibrate(VibrationEffect.createOneShot(150, VibrationEffect.DEFAULT_AMPLITUDE))
+                    }
                     requireActivity().onBackPressedDispatcher.onBackPressed() 
                 }
             }
